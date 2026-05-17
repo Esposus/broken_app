@@ -400,6 +400,181 @@ Check IO/CPU overload!
 [ perf record: Captured and wrote 2209,888 MB perf.data (36071 samples) ]
 Running perf script [5s]:                                                     writing flamegraph to "flamegraph.svg"
 ```
-![flamegraph](flamegraph.svg)
+![flamegraph](flamegraph_before.svg)
 
 # После исправления
+
+## cargo check
+
+```bash
+user@XiaomiBookPro16:~/Practicum/broken_app$ cargo check
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+```
+
+## cargo test
+
+```bash
+user@XiaomiBookPro16:~/Practicum/broken_app$ cargo test
+   Compiling broken-app v0.1.0 (/home/user/Practicum/broken_app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s
+     Running unittests src/lib.rs (target/debug/deps/broken_app-304e8b1438a718f1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/demo.rs (target/debug/deps/demo-5eda75142db377f3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/integration.rs (target/debug/deps/integration-310ec0eb5271551d)
+
+running 6 tests
+test fib_small_numbers ... ok
+test averages_only_positive ... ok
+test normalize_simple ... ok
+test dedup_preserves_uniques ... ok
+test counts_non_zero_bytes ... ok
+test sums_even_numbers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests broken_app
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+## cargo bench
+
+```bash
+user@XiaomiBookPro16:~/Practicum/broken_app$ cargo bench
+   Compiling broken-app v0.1.0 (/home/user/Practicum/broken_app)
+    Finished `bench` profile [optimized] target(s) in 0.39s
+     Running unittests src/lib.rs (target/release/deps/broken_app-c7bb5168b7a0df2d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/demo.rs (target/release/deps/demo-68a3098f77725383)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/baseline.rs (target/release/deps/baseline-79ad688cb5449ace)
+sum_even: 48.07µs
+slow_fib: 756ns
+slow_dedup: 579.447µs
+sum_even: 66.14µs
+slow_fib: 365ns
+slow_dedup: 410.76µs
+sum_even: 43.797µs
+slow_fib: 193ns
+slow_dedup: 325.961µs
+     Running benches/criterion.rs (target/release/deps/criterion-8aab99522dbf3fb8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+```
+
+## miri
+```bash
+user@XiaomiBookPro16:~/Practicum/broken_app$ cargo +nightly miri run
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running `/home/user/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo-miri runner target/miri/x86_64-unknown-linux-gnu/debug/demo`
+sum_even: 6
+non-zero bytes: 3
+normalize: helloworld
+fib(20): 6765
+dedup: [1, 2, 3, 4]
+```
+
+## valgrind
+```bash
+user@XiaomiBookPro16:~/Practicum/broken_app$ valgrind --leak-check=full --show-leak-kinds=all target/debug/demo
+==11190== Memcheck, a memory error detector
+==11190== Copyright (C) 2002-2026, and GNU GPL'd, by Julian Seward et al.
+==11190== Using Valgrind-3.27.0 and LibVEX; rerun with -h for copyright info
+==11190== Command: target/debug/demo
+==11190== 
+sum_even: 6
+non-zero bytes: 3
+normalize: helloworld
+fib(20): 6765
+dedup: [1, 2, 3, 4]
+==11190== 
+==11190== HEAP SUMMARY:
+==11190==     in use at exit: 544 bytes in 1 blocks
+==11190==   total heap usage: 15 allocs, 14 frees, 3,822 bytes allocated
+==11190== 
+==11190== 544 bytes in 1 blocks are still reachable in loss record 1 of 1
+==11190==    at 0x48B8858: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==11190==    by 0x4053D69: alloc (alloc.rs:95)
+==11190==    by 0x4053D69: alloc_impl_runtime (alloc.rs:190)
+==11190==    by 0x4053D69: alloc_impl (alloc.rs:312)
+==11190==    by 0x4053D69: allocate (alloc.rs:429)
+==11190==    by 0x4053D69: try_new_uninit_in<alloc::collections::btree::node::LeafNode<usize, std::sys::pal::unix::stack_overflow::thread_info::ThreadInfo>, alloc::alloc::Global> (boxed.rs:614)
+==11190==    by 0x4053D69: new_uninit_in<alloc::collections::btree::node::LeafNode<usize, std::sys::pal::unix::stack_overflow::thread_info::ThreadInfo>, alloc::alloc::Global> (boxed.rs:581)
+==11190==    by 0x4053D69: new<usize, std::sys::pal::unix::stack_overflow::thread_info::ThreadInfo, alloc::alloc::Global> (node.rs:87)
+==11190==    by 0x4053D69: new_leaf<usize, std::sys::pal::unix::stack_overflow::thread_info::ThreadInfo, alloc::alloc::Global> (node.rs:225)
+==11190==    by 0x4053D69: insert_entry<usize, std::sys::pal::unix::stack_overflow::thread_info::ThreadInfo, alloc::alloc::Global> (entry.rs:403)
+==11190==    by 0x4053D69: insert<usize, std::sys::pal::unix::stack_overflow::thread_info::ThreadInfo, alloc::alloc::Global> (entry.rs:377)
+==11190==    by 0x4053D69: insert<usize, std::sys::pal::unix::stack_overflow::thread_info::ThreadInfo, alloc::alloc::Global> (map.rs:1053)
+==11190==    by 0x4053D69: std::sys::pal::unix::stack_overflow::thread_info::set_current_info (thread_info.rs:122)
+==11190==    by 0x4050DBC: init (stack_overflow.rs:179)
+==11190==    by 0x4050DBC: init (mod.rs:41)
+==11190==    by 0x4050DBC: init (rt.rs:118)
+==11190==    by 0x4050DBC: {closure#0} (rt.rs:173)
+==11190==    by 0x4050DBC: do_call<std::rt::lang_start_internal::{closure_env#0}, isize> (panicking.rs:581)
+==11190==    by 0x4050DBC: catch_unwind<isize, std::rt::lang_start_internal::{closure_env#0}> (panicking.rs:544)
+==11190==    by 0x4050DBC: catch_unwind<std::rt::lang_start_internal::{closure_env#0}, isize> (panic.rs:359)
+==11190==    by 0x4050DBC: std::rt::lang_start_internal (rt.rs:171)
+==11190==    by 0x401E6D6: std::rt::lang_start (rt.rs:205)
+==11190==    by 0x401EBFD: main (in /home/user/Practicum/broken_app/target/debug/demo)
+==11190== 
+==11190== LEAK SUMMARY:
+==11190==    definitely lost: 0 bytes in 0 blocks
+==11190==    indirectly lost: 0 bytes in 0 blocks
+==11190==      possibly lost: 0 bytes in 0 blocks
+==11190==    still reachable: 544 bytes in 1 blocks
+==11190==         suppressed: 0 bytes in 0 blocks
+==11190== 
+==11190== For lists of detected and suppressed errors, rerun with: -s
+==11190== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+```
+
+## flamegraph
+```bash
+user@XiaomiBookPro16:~/Practicum/broken_app$ cargo flamegraph --bin demo
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
+Failed to read max cpus, using default of 4096
+WARNING: Kernel address maps (/proc/{kallsyms,modules}) are restricted,
+check /proc/sys/kernel/kptr_restrict and /proc/sys/kernel/perf_event_paranoid.
+
+Samples in kernel functions may not be resolved if a suitable vmlinux
+file is not found in the buildid cache or in the vmlinux path.
+
+Samples in kernel modules won't be resolved at all.
+
+If some relocation was applied (e.g. kexec) symbols may be misresolved
+even with a suitable vmlinux or kallsyms file.
+
+Couldn't record kernel reference relocation symbol
+Symbol resolution may be skewed if relocation was used (e.g. kexec).
+Check /proc/kallsyms permission or run as root.
+sum_even: 6
+non-zero bytes: 3
+normalize: helloworld
+fib(20): 6765
+dedup: [1, 2, 3, 4]
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0,189 MB perf.data (3 samples) ]
+Running perf script [0s]:                                                                                                                                                        writing flamegraph to "flamegraph.svg"
+```
+![flamegraph](flamegraph.svg)
